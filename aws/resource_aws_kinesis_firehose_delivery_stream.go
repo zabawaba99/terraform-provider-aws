@@ -269,9 +269,6 @@ func flattenKinesisFirehoseDeliveryStream(d *schema.ResourceData, s *firehose.De
 			elasticsearchConfList[0] = elasticsearchConfiguration
 			d.Set("elasticsearch_configuration", elasticsearchConfList)
 			d.Set("s3_configuration", flattenFirehoseS3Configuration(*destination.ElasticsearchDestinationDescription.S3DestinationDescription))
-		} else if destination.S3DestinationDescription != nil {
-			d.Set("destination", "s3")
-			d.Set("s3_configuration", flattenFirehoseS3Configuration(*destination.S3DestinationDescription))
 		} else if destination.ExtendedS3DestinationDescription != nil {
 			d.Set("destination", "extended_s3")
 
@@ -294,6 +291,9 @@ func flattenKinesisFirehoseDeliveryStream(d *schema.ResourceData, s *firehose.De
 			extendedS3ConfList := make([]map[string]interface{}, 1)
 			extendedS3ConfList[0] = extendedS3Configuration
 			d.Set("extended_s3_configuration", extendedS3ConfList)
+		} else if destination.S3DestinationDescription != nil {
+			d.Set("destination", "extended_s3")
+			d.Set("s3_configuration", flattenFirehoseS3Configuration(*destination.S3DestinationDescription))
 		}
 		d.Set("destination_id", *destination.DestinationId)
 	}
@@ -1091,9 +1091,7 @@ func resourceAwsKinesisFirehoseDeliveryStreamCreate(d *schema.ResourceData, meta
 	} else {
 		s3Config := createS3Config(d)
 
-		if d.Get("destination").(string) == "s3" {
-			createInput.S3DestinationConfiguration = s3Config
-		} else if d.Get("destination").(string) == "elasticsearch" {
+		if d.Get("destination").(string) == "elasticsearch" {
 			esConfig, err := createElasticsearchConfig(d, s3Config)
 			if err != nil {
 				return err
@@ -1213,9 +1211,7 @@ func resourceAwsKinesisFirehoseDeliveryStreamUpdate(d *schema.ResourceData, meta
 	} else {
 		s3Config := updateS3Config(d)
 
-		if d.Get("destination").(string) == "s3" {
-			updateInput.S3DestinationUpdate = s3Config
-		} else if d.Get("destination").(string) == "elasticsearch" {
+		if d.Get("destination").(string) == "elasticsearch" {
 			esUpdate, err := updateElasticsearchConfig(d, s3Config)
 			if err != nil {
 				return err
