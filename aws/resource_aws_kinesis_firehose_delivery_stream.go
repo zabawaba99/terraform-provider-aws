@@ -120,14 +120,6 @@ func processingConfigurationSchema() *schema.Schema {
 										"parameter_name": {
 											Type:     schema.TypeString,
 											Required: true,
-											ValidateFunc: func(v interface{}, k string) (ws []string, errors []error) {
-												value := v.(string)
-												if value != "LambdaArn" && value != "NumberOfRetries" {
-													errors = append(errors, fmt.Errorf(
-														"%q must be one of 'LambdaArn', 'NumberOfRetries'", k))
-												}
-												return
-											},
 										},
 										"parameter_value": {
 											Type:     schema.TypeString,
@@ -204,7 +196,9 @@ func flattenFirehoseS3Configuration(s3 firehose.S3DestinationDescription) []inte
 	return []interface{}{s3Configuration}
 }
 
-func flattenProcessingConfiguration(pc firehose.ProcessingConfiguration, roleArn string) []map[string]interface{} {
+func flattenProcessingConfiguration(pc firehose.ProcessingConfiguration, existingConfiguration []interface{},
+	roleArn string) []map[string]interface{} {
+
 	processingConfiguration := make([]map[string]interface{}, 1)
 
 	// It is necessary to explicitely filter this out
@@ -320,7 +314,8 @@ func flattenKinesisFirehoseDeliveryStream(d *schema.ResourceData, s *firehose.De
 			}
 			if destination.ExtendedS3DestinationDescription.ProcessingConfiguration != nil {
 				extendedS3Configuration["processing_configuration"] = flattenProcessingConfiguration(
-					*destination.ExtendedS3DestinationDescription.ProcessingConfiguration, roleArn)
+					*destination.ExtendedS3DestinationDescription.ProcessingConfiguration,
+					d.Get("extended_s3_configuration.0.processing_configuration"), roleArn)
 			}
 			extendedS3ConfList := make([]map[string]interface{}, 1)
 			extendedS3ConfList[0] = extendedS3Configuration

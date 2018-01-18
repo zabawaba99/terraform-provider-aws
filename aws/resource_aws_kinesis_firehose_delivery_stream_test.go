@@ -147,6 +147,34 @@ func TestAccAWSKinesisFirehoseDeliveryStream_ExtendedS3basic(t *testing.T) {
 	})
 }
 
+func TestAccAWSKinesisFirehoseDeliveryStream_ExtendedS3_withDefaults(t *testing.T) {
+	rString := acctest.RandString(8)
+	rInt := acctest.RandInt()
+
+	funcName := fmt.Sprintf("aws_kinesis_firehose_delivery_stream_test_%s", rString)
+	policyName := fmt.Sprintf("tf_acc_policy_%s", rString)
+	roleName := fmt.Sprintf("tf_acc_role_%s", rString)
+	streamName := fmt.Sprintf("tf_acc_stream_%s", rString)
+
+	var stream firehose.DeliveryStreamDescription
+	config := testAccFirehoseAWSLambdaConfigBasic(funcName, policyName, roleName) +
+		testAccKinesisFirehoseDeliveryStreamConfig_extendedS3basicWithDefaults(streamName, rInt)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckKinesisFirehoseDeliveryStreamDestroy_ExtendedS3,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckKinesisFirehoseDeliveryStreamExists("aws_kinesis_firehose_delivery_stream.test_stream", &stream),
+				),
+			},
+		},
+	})
+}
+
 func TestAccAWSKinesisFirehoseDeliveryStream_ExtendedS3InvalidProcessorType(t *testing.T) {
 	rString := acctest.RandString(8)
 	funcName := fmt.Sprintf("aws_kinesis_firehose_delivery_stream_test_%s", rString)
@@ -869,6 +897,48 @@ resource "aws_kinesis_firehose_delivery_stream" "test_stream" {
   }
 }
 `
+
+func testAccKinesisFirehoseDeliveryStreamConfig_extendedS3basicWithDefaults(streamName string, randInt int) string {
+	return fmt.Sprintf(`
+%s
+resource "aws_kinesis_firehose_delivery_stream" "test_stream" {
+  depends_on = ["aws_iam_role_policy.firehose"]
+  name = "%s"
+  destination = "extended_s3"
+
+  extended_s3_configuration {
+    role_arn   = "${aws_iam_role.firehose.arn}"
+    bucket_arn = "${aws_s3_bucket.bucket.arn}"
+    processing_configuration {
+      enabled = "true"
+      processors {
+        type = "Lambda"
+        parameters {
+          parameter_name = "LambdaArn"
+          parameter_value = "${aws_lambda_function.lambda_function_test.arn}:$LATEST"
+        }
+        parameters {
+          parameter_name = "NumberOfRetries"
+          parameter_value = "3"
+        }
+        parameters {
+          parameter_name = "RoleArn"
+          parameter_value = "${aws_iam_role.firehose.arn}"
+        }
+        parameters {
+          parameter_name = "BufferSizeInMBs"
+          parameter_value = "3"
+        }
+        parameters {
+          parameter_name = "BufferIntervalInSeconds"
+          parameter_value = "60"
+        }
+      }
+    }
+  }
+}
+`, fmt.Sprintf(testAccKinesisFirehoseDeliveryStreamBaseConfig, randInt, randInt, randInt), streamName)
+}
 
 var testAccKinesisFirehoseDeliveryStreamConfig_extendedS3InvalidProcessorType = testAccKinesisFirehoseDeliveryStreamBaseConfig + `
 resource "aws_kinesis_firehose_delivery_stream" "test_stream" {
