@@ -23,6 +23,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/batch"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/cloudfront"
+	"github.com/aws/aws-sdk-go/service/cloudsearch"
 	"github.com/aws/aws-sdk-go/service/cloudtrail"
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
 	"github.com/aws/aws-sdk-go/service/cloudwatchevents"
@@ -139,6 +140,7 @@ type Config struct {
 type AWSClient struct {
 	cfconn                *cloudformation.CloudFormation
 	cloudfrontconn        *cloudfront.CloudFront
+	cloudsearchconn       *cloudsearch.CloudSearch
 	cloudtrailconn        *cloudtrail.CloudTrail
 	cloudwatchconn        *cloudwatch.CloudWatch
 	cloudwatchlogsconn    *cloudwatchlogs.CloudWatchLogs
@@ -400,6 +402,7 @@ func (c *Config) Client() (interface{}, error) {
 	client.autoscalingconn = autoscaling.New(sess)
 	client.cfconn = cloudformation.New(awsCfSess)
 	client.cloudfrontconn = cloudfront.New(sess)
+	client.cloudsearchconn = cloudsearch.New(sess)
 	client.cloudtrailconn = cloudtrail.New(sess)
 	client.cloudwatchconn = cloudwatch.New(awsCwSess)
 	client.cloudwatcheventsconn = cloudwatchevents.New(awsCweSess)
