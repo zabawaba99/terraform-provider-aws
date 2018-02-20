@@ -240,6 +240,14 @@ func resourceAwsRoute53Record() *schema.Resource {
 				Type:     schema.TypeBool,
 				Optional: true,
 				Default:  true,
+				ValidateFunc: func(v interface{}, k string) (ws []string, errors []error) {
+					allowOverwrite := v.(bool)
+					if allowOverwrite {
+						ws = append(ws, "Records will NOT be overwritten by default (i.e. allow_overwrite will default to false) "+
+							"in future major version, where this warning will also be removed. It is recommended to set this to false.")
+					}
+					return
+				},
 			},
 		},
 	}
