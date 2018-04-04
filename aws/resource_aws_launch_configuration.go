@@ -139,22 +139,113 @@ func resourceAwsLaunchConfiguration() *schema.Resource {
 				Default:  true,
 			},
 
-			"ebs_block_device": {
-				Type:     schema.TypeSet,
-				Optional: true,
-				Computed: true,
+			"block_device_mapping": {
+				Type:          schema.TypeSet,
+				Optional:      true,
+				Computed:      true,
+				ForceNew:      true,
+				ConflictsWith: []string{"ebs_block_device", "ephemeral_block_device", "root_block_device"},
+				Set: func(v interface{}) int {
+					resource := resourceAwsLaunchConfiguration().Schema["block_device_mapping"].Elem.(*schema.Resource)
+					f := schema.HashResource(resource)
+					m := v.(map[string]interface{})
+
+					// Root device receive their device names automatically (field is computed)
+					// so we just avoid showing diff this way
+					if isRoot, ok := m["is_root_device"].(bool); ok && isRoot {
+						delete(m, "device_name")
+					}
+					return f(m)
+				},
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
+						"device_name": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Computed: true,
+							ForceNew: true,
+						},
+
+						"virtual_name": {
+							Type:     schema.TypeString,
+							Optional: true,
+							ForceNew: true,
+						},
+
+						"is_root_device": {
+							Type:     schema.TypeBool,
+							Optional: true,
+							ForceNew: true,
+						},
+
+						"ebs": {
+							Type:     schema.TypeList,
+							MaxItems: 1,
+							Optional: true,
+							ForceNew: true,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"delete_on_termination": {
+										Type:     schema.TypeBool,
+										Optional: true,
+										Default:  true,
+										ForceNew: true,
+									},
+									"iops": {
+										Type:     schema.TypeInt,
+										Optional: true,
+										Computed: true,
+										ForceNew: true,
+									},
+									"snapshot_id": {
+										Type:     schema.TypeString,
+										Optional: true,
+										Computed: true,
+										ForceNew: true,
+									},
+									"volume_size": {
+										Type:     schema.TypeInt,
+										Optional: true,
+										Computed: true,
+										ForceNew: true,
+									},
+									"volume_type": {
+										Type:     schema.TypeString,
+										Optional: true,
+										Computed: true,
+										ForceNew: true,
+									},
+									"encrypted": {
+										Type:     schema.TypeBool,
+										Optional: true,
+										Computed: true,
+										ForceNew: true,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+
+			// TODO: Deprecated fields, remove in the next major version
+			"ebs_block_device": {
+				Type:       schema.TypeSet,
+				Optional:   true,
+				Computed:   true,
+				Deprecated: "Use 'block_device_mapping' instead.",
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"device_name": {
+							Type:     schema.TypeString,
+							Required: true,
+							ForceNew: true,
+						},
+
 						"delete_on_termination": {
 							Type:     schema.TypeBool,
 							Optional: true,
 							Default:  true,
-							ForceNew: true,
-						},
-
-						"device_name": {
-							Type:     schema.TypeString,
-							Required: true,
 							ForceNew: true,
 						},
 
@@ -195,11 +286,12 @@ func resourceAwsLaunchConfiguration() *schema.Resource {
 					},
 				},
 			},
-
 			"ephemeral_block_device": {
-				Type:     schema.TypeSet,
-				Optional: true,
-				ForceNew: true,
+				Type:       schema.TypeSet,
+				Optional:   true,
+				Computed:   true,
+				ForceNew:   true,
+				Deprecated: "Use 'block_device_mapping' instead.",
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"device_name": {
@@ -221,12 +313,12 @@ func resourceAwsLaunchConfiguration() *schema.Resource {
 					return hashcode.String(buf.String())
 				},
 			},
-
 			"root_block_device": {
-				Type:     schema.TypeList,
-				Optional: true,
-				Computed: true,
-				MaxItems: 1,
+				Type:       schema.TypeList,
+				Optional:   true,
+				Computed:   true,
+				MaxItems:   1,
+				Deprecated: "Use 'block_device_mapping' instead.",
 				Elem: &schema.Resource{
 					// "You can only modify the volume size, volume type, and Delete on
 					// Termination flag on the block device mapping entry for the root
@@ -321,107 +413,121 @@ func resourceAwsLaunchConfigurationCreate(d *schema.ResourceData, meta interface
 		)
 	}
 
-	var blockDevices []*autoscaling.BlockDeviceMapping
-
-	// We'll use this to detect if we're declaring it incorrectly as an ebs_block_device.
-	rootDeviceName, err := fetchRootDeviceName(d.Get("image_id").(string), ec2conn)
-	if err != nil {
-		return err
-	}
-	if rootDeviceName == nil {
-		// We do this so the value is empty so we don't have to do nil checks later
-		var blank string
-		rootDeviceName = &blank
-	}
-
-	if v, ok := d.GetOk("ebs_block_device"); ok {
-		vL := v.(*schema.Set).List()
-		for _, v := range vL {
-			bd := v.(map[string]interface{})
-			ebs := &autoscaling.Ebs{
-				DeleteOnTermination: aws.Bool(bd["delete_on_termination"].(bool)),
-			}
-
-			if v, ok := bd["snapshot_id"].(string); ok && v != "" {
-				ebs.SnapshotId = aws.String(v)
-			}
-
-			if v, ok := bd["encrypted"].(bool); ok && v {
-				ebs.Encrypted = aws.Bool(v)
-			}
-
-			if v, ok := bd["volume_size"].(int); ok && v != 0 {
-				ebs.VolumeSize = aws.Int64(int64(v))
-			}
-
-			if v, ok := bd["volume_type"].(string); ok && v != "" {
-				ebs.VolumeType = aws.String(v)
-			}
-
-			if v, ok := bd["iops"].(int); ok && v > 0 {
-				ebs.Iops = aws.Int64(int64(v))
-			}
-
-			if *aws.String(bd["device_name"].(string)) == *rootDeviceName {
-				return fmt.Errorf("Root device (%s) declared as an 'ebs_block_device'.  Use 'root_block_device' keyword.", *rootDeviceName)
-			}
-
-			blockDevices = append(blockDevices, &autoscaling.BlockDeviceMapping{
-				DeviceName: aws.String(bd["device_name"].(string)),
-				Ebs:        ebs,
-			})
-		}
-	}
-
-	if v, ok := d.GetOk("ephemeral_block_device"); ok {
-		vL := v.(*schema.Set).List()
-		for _, v := range vL {
-			bd := v.(map[string]interface{})
-			blockDevices = append(blockDevices, &autoscaling.BlockDeviceMapping{
-				DeviceName:  aws.String(bd["device_name"].(string)),
-				VirtualName: aws.String(bd["virtual_name"].(string)),
-			})
-		}
-	}
-
-	if v, ok := d.GetOk("root_block_device"); ok {
-		vL := v.([]interface{})
-		for _, v := range vL {
-			bd := v.(map[string]interface{})
-			ebs := &autoscaling.Ebs{
-				DeleteOnTermination: aws.Bool(bd["delete_on_termination"].(bool)),
-			}
-
-			if v, ok := bd["volume_size"].(int); ok && v != 0 {
-				ebs.VolumeSize = aws.Int64(int64(v))
-			}
-
-			if v, ok := bd["volume_type"].(string); ok && v != "" {
-				ebs.VolumeType = aws.String(v)
-			}
-
-			if v, ok := bd["iops"].(int); ok && v > 0 {
-				ebs.Iops = aws.Int64(int64(v))
-			}
-
-			if dn, err := fetchRootDeviceName(d.Get("image_id").(string), ec2conn); err == nil {
-				if dn == nil {
-					return fmt.Errorf(
-						"Expected to find a Root Device name for AMI (%s), but got none",
-						d.Get("image_id").(string))
-				}
-				blockDevices = append(blockDevices, &autoscaling.BlockDeviceMapping{
-					DeviceName: dn,
-					Ebs:        ebs,
-				})
-			} else {
+	if v, ok := d.GetOk("block_device_mapping"); ok {
+		mappings := v.(*schema.Set)
+		if mappings.Len() > 0 {
+			var err error
+			amiId := d.Get("image_id").(string)
+			createLaunchConfigurationOpts.BlockDeviceMappings, err = expandAutoscalingBlockDeviceMappings(mappings.List(), amiId, ec2conn)
+			if err != nil {
 				return err
 			}
 		}
-	}
+	} else {
+		// TODO: Deprecated fields, remove in the next major version
+		var blockDevices []*autoscaling.BlockDeviceMapping
 
-	if len(blockDevices) > 0 {
-		createLaunchConfigurationOpts.BlockDeviceMappings = blockDevices
+		// We'll use this to detect if we're declaring it incorrectly as an ebs_block_device.
+		rootDeviceName, err := fetchRootDeviceName(d.Get("image_id").(string), ec2conn)
+		if err != nil {
+			return err
+		}
+		if rootDeviceName == nil {
+			// We do this so the value is empty so we don't have to do nil checks later
+			var blank string
+			rootDeviceName = &blank
+		}
+
+		if v, ok := d.GetOk("ebs_block_device"); ok {
+			vL := v.(*schema.Set).List()
+			for _, v := range vL {
+				bd := v.(map[string]interface{})
+
+				ebs := &autoscaling.Ebs{
+					DeleteOnTermination: aws.Bool(bd["delete_on_termination"].(bool)),
+				}
+
+				if v, ok := bd["snapshot_id"].(string); ok && v != "" {
+					ebs.SnapshotId = aws.String(v)
+				}
+
+				if v, ok := bd["encrypted"].(bool); ok && v {
+					ebs.Encrypted = aws.Bool(v)
+				}
+
+				if v, ok := bd["volume_size"].(int); ok && v != 0 {
+					ebs.VolumeSize = aws.Int64(int64(v))
+				}
+
+				if v, ok := bd["volume_type"].(string); ok && v != "" {
+					ebs.VolumeType = aws.String(v)
+				}
+
+				if v, ok := bd["iops"].(int); ok && v > 0 {
+					ebs.Iops = aws.Int64(int64(v))
+				}
+
+				if *aws.String(bd["device_name"].(string)) == *rootDeviceName {
+					return fmt.Errorf("Root device (%s) declared as an 'ebs_block_device'.  Use 'root_block_device' keyword.", *rootDeviceName)
+				}
+
+				blockDevices = append(blockDevices, &autoscaling.BlockDeviceMapping{
+					DeviceName: aws.String(bd["device_name"].(string)),
+					Ebs:        ebs,
+				})
+			}
+		}
+
+		if v, ok := d.GetOk("ephemeral_block_device"); ok {
+			vL := v.(*schema.Set).List()
+			for _, v := range vL {
+				bd := v.(map[string]interface{})
+				blockDevices = append(blockDevices, &autoscaling.BlockDeviceMapping{
+					DeviceName:  aws.String(bd["device_name"].(string)),
+					VirtualName: aws.String(bd["virtual_name"].(string)),
+				})
+			}
+		}
+
+		if v, ok := d.GetOk("root_block_device"); ok {
+			vL := v.([]interface{})
+			for _, v := range vL {
+				bd := v.(map[string]interface{})
+				ebs := &autoscaling.Ebs{
+					DeleteOnTermination: aws.Bool(bd["delete_on_termination"].(bool)),
+				}
+
+				if v, ok := bd["volume_size"].(int); ok && v != 0 {
+					ebs.VolumeSize = aws.Int64(int64(v))
+				}
+
+				if v, ok := bd["volume_type"].(string); ok && v != "" {
+					ebs.VolumeType = aws.String(v)
+				}
+
+				if v, ok := bd["iops"].(int); ok && v > 0 {
+					ebs.Iops = aws.Int64(int64(v))
+				}
+
+				if dn, err := fetchRootDeviceName(d.Get("image_id").(string), ec2conn); err == nil {
+					if dn == nil {
+						return fmt.Errorf(
+							"Expected to find a Root Device name for AMI (%s), but got none",
+							d.Get("image_id").(string))
+					}
+					blockDevices = append(blockDevices, &autoscaling.BlockDeviceMapping{
+						DeviceName: dn,
+						Ebs:        ebs,
+					})
+				} else {
+					return err
+				}
+			}
+		}
+
+		if len(blockDevices) > 0 {
+			createLaunchConfigurationOpts.BlockDeviceMappings = blockDevices
+		}
 	}
 
 	var lcName string
@@ -438,7 +544,7 @@ func resourceAwsLaunchConfigurationCreate(d *schema.ResourceData, meta interface
 
 	// IAM profiles can take ~10 seconds to propagate in AWS:
 	// http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html#launch-instance-with-role-console
-	err = resource.Retry(90*time.Second, func() *resource.RetryError {
+	err := resource.Retry(90*time.Second, func() *resource.RetryError {
 		_, err := autoscalingconn.CreateLaunchConfiguration(&createLaunchConfigurationOpts)
 		if err != nil {
 			if isAWSErr(err, "ValidationError", "Invalid IamInstanceProfile") {
@@ -511,6 +617,15 @@ func resourceAwsLaunchConfigurationRead(d *schema.ResourceData, meta interface{}
 
 	d.Set("vpc_classic_link_id", lc.ClassicLinkVPCId)
 	d.Set("vpc_classic_link_security_groups", lc.ClassicLinkVPCSecurityGroups)
+
+	bdms, err := flattenAutoscalingBlockDeviceMappings(lc.BlockDeviceMappings, *lc.ImageId, ec2conn)
+	if err != nil {
+		return err
+	}
+	err = d.Set("block_device_mapping", bdms)
+	if err != nil {
+		return err
+	}
 
 	if err := readLCBlockDevices(d, lc, ec2conn); err != nil {
 		return err

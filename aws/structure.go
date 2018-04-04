@@ -3955,3 +3955,132 @@ func flattenIotThingTypeProperties(s *iot.ThingTypeProperties) []map[string]inte
 
 	return []map[string]interface{}{m}
 }
+
+func expandAutoscalingBlockDeviceMappings(in []interface{}, amiId string, ec2conn *ec2.EC2) ([]*autoscaling.BlockDeviceMapping, error) {
+	if len(in) == 0 || in[0] == nil {
+		return nil, nil
+	}
+
+	out := make([]*autoscaling.BlockDeviceMapping, len(in), len(in))
+	for i, bdm := range in {
+		m := bdm.(map[string]interface{})
+
+		out[i] = &autoscaling.BlockDeviceMapping{}
+		if v, ok := m["is_root_device"]; ok {
+			isRoot := v.(bool)
+			if isRoot {
+				var err error
+				out[i].DeviceName, err = fetchRootDeviceName(amiId, ec2conn)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+		if v, ok := m["device_name"].(string); ok && len(v) > 0 {
+			out[i].DeviceName = aws.String(v)
+		}
+		if v, ok := m["ebs"]; ok {
+			out[i].Ebs = expandAutoscalingEbs(v.([]interface{}))
+		}
+		if v, ok := m["virtual_name"].(string); ok && len(v) > 0 {
+			out[i].VirtualName = aws.String(v)
+		}
+	}
+	return out, nil
+}
+
+func expandAutoscalingEbs(in []interface{}) *autoscaling.Ebs {
+	if len(in) == 0 || in[0] == nil {
+		return nil
+	}
+	m := in[0].(map[string]interface{})
+
+	ebs := &autoscaling.Ebs{
+		DeleteOnTermination: aws.Bool(m["delete_on_termination"].(bool)),
+	}
+
+	if v, ok := m["snapshot_id"].(string); ok && v != "" {
+		ebs.SnapshotId = aws.String(v)
+	}
+
+	if v, ok := m["encrypted"].(bool); ok && v {
+		ebs.Encrypted = aws.Bool(v)
+	}
+
+	if v, ok := m["volume_size"].(int); ok && v != 0 {
+		ebs.VolumeSize = aws.Int64(int64(v))
+	}
+
+	if v, ok := m["volume_type"].(string); ok && v != "" {
+		ebs.VolumeType = aws.String(v)
+	}
+
+	if v, ok := m["iops"].(int); ok && v > 0 {
+		ebs.Iops = aws.Int64(int64(v))
+	}
+
+	return ebs
+}
+
+func flattenAutoscalingBlockDeviceMappings(in []*autoscaling.BlockDeviceMapping, amiId string, ec2conn *ec2.EC2) ([]interface{}, error) {
+	if len(in) == 0 {
+		return []interface{}{}, nil
+	}
+
+	out := make([]interface{}, len(in), len(in))
+	for i, bdm := range in {
+		m := make(map[string]interface{}, 0)
+		if bdm.DeviceName != nil {
+			m["device_name"] = *bdm.DeviceName
+
+			rootDeviceName, err := fetchRootDeviceName(amiId, ec2conn)
+			if err != nil {
+				return nil, err
+			}
+
+			if *rootDeviceName == *bdm.DeviceName {
+				m["is_root_device"] = true
+			} else {
+				m["is_root_device"] = false
+			}
+		}
+		if bdm.Ebs != nil {
+			m["ebs"] = flattenAutoscalingEbs(bdm.Ebs)
+		}
+		if bdm.VirtualName != nil {
+			m["virtual_name"] = *bdm.VirtualName
+		}
+
+		out[i] = m
+	}
+
+	return out, nil
+}
+
+func flattenAutoscalingEbs(in *autoscaling.Ebs) []interface{} {
+	if in == nil {
+		return []interface{}{}
+	}
+
+	m := make(map[string]interface{}, 0)
+	if in.DeleteOnTermination != nil {
+		m["delete_on_termination"] = *in.DeleteOnTermination
+	}
+	if in.Encrypted != nil {
+		m["encrypted"] = *in.Encrypted
+	}
+	if in.Iops != nil {
+		m["iops"] = *in.Iops
+	}
+	if in.SnapshotId != nil {
+		m["snapshot_id"] = *in.SnapshotId
+	}
+	if in.VolumeSize != nil {
+		m["volume_size"] = *in.VolumeSize
+	}
+	if in.VolumeType != nil {
+		m["volume_type"] = *in.VolumeType
+	}
+
+	return []interface{}{m}
+}
