@@ -105,7 +105,7 @@ func TestAccAWSLaunchConfiguration_basic(t *testing.T) {
 	})
 }
 
-func TestAccAWSLaunchConfiguration_withBlockDevices(t *testing.T) {
+func TestAccAWSLaunchConfiguration_deprecated_withBlockDevices(t *testing.T) {
 	var conf autoscaling.LaunchConfiguration
 
 	resource.Test(t, resource.TestCase{
@@ -114,7 +114,7 @@ func TestAccAWSLaunchConfiguration_withBlockDevices(t *testing.T) {
 		CheckDestroy: testAccCheckAWSLaunchConfigurationDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccAWSLaunchConfigurationConfig,
+				Config: testAccAWSLaunchConfigurationConfigDeprecated,
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckAWSLaunchConfigurationExists("aws_launch_configuration.bar", &conf),
 					testAccCheckAWSLaunchConfigurationAttributes(&conf),
@@ -132,7 +132,7 @@ func TestAccAWSLaunchConfiguration_withBlockDevices(t *testing.T) {
 	})
 }
 
-func TestAccAWSLaunchConfiguration_updateRootBlockDevice(t *testing.T) {
+func TestAccAWSLaunchConfiguration_deprecated_updateRootBlockDevice(t *testing.T) {
 	var conf autoscaling.LaunchConfiguration
 	rInt := acctest.RandInt()
 
@@ -142,7 +142,7 @@ func TestAccAWSLaunchConfiguration_updateRootBlockDevice(t *testing.T) {
 		CheckDestroy: testAccCheckAWSLaunchConfigurationDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccAWSLaunchConfigurationConfigWithRootBlockDevice(rInt),
+				Config: testAccAWSLaunchConfigurationConfigDeprecatedWithRootBlockDevice(rInt),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckAWSLaunchConfigurationExists("aws_launch_configuration.bar", &conf),
 					resource.TestCheckResourceAttr(
@@ -150,7 +150,7 @@ func TestAccAWSLaunchConfiguration_updateRootBlockDevice(t *testing.T) {
 				),
 			},
 			{
-				Config: testAccAWSLaunchConfigurationConfigWithRootBlockDeviceUpdated(rInt),
+				Config: testAccAWSLaunchConfigurationConfigDeprecatedWithRootBlockDeviceUpdated(rInt),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckAWSLaunchConfigurationExists("aws_launch_configuration.bar", &conf),
 					resource.TestCheckResourceAttr(
@@ -249,7 +249,7 @@ func testAccCheckAWSLaunchConfigurationWithEncryption(conf *autoscaling.LaunchCo
 	}
 }
 
-func TestAccAWSLaunchConfiguration_withEncryption(t *testing.T) {
+func TestAccAWSLaunchConfiguration_deprecated_withEncryption(t *testing.T) {
 	var conf autoscaling.LaunchConfiguration
 
 	resource.Test(t, resource.TestCase{
@@ -258,7 +258,7 @@ func TestAccAWSLaunchConfiguration_withEncryption(t *testing.T) {
 		CheckDestroy: testAccCheckAWSLaunchConfigurationDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccAWSLaunchConfigurationWithEncryption,
+				Config: testAccAWSLaunchConfigurationWithEncryptionDeprecated,
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckAWSLaunchConfigurationExists("aws_launch_configuration.baz", &conf),
 					testAccCheckAWSLaunchConfigurationWithEncryption(&conf),
@@ -268,7 +268,7 @@ func TestAccAWSLaunchConfiguration_withEncryption(t *testing.T) {
 	})
 }
 
-func TestAccAWSLaunchConfiguration_updateEbsBlockDevices(t *testing.T) {
+func TestAccAWSLaunchConfiguration_deprecated_updateEbsBlockDevices(t *testing.T) {
 	var conf autoscaling.LaunchConfiguration
 
 	resource.Test(t, resource.TestCase{
@@ -277,7 +277,7 @@ func TestAccAWSLaunchConfiguration_updateEbsBlockDevices(t *testing.T) {
 		CheckDestroy: testAccCheckAWSLaunchConfigurationDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccAWSLaunchConfigurationWithEncryption,
+				Config: testAccAWSLaunchConfigurationWithEncryptionDeprecated,
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckAWSLaunchConfigurationExists("aws_launch_configuration.baz", &conf),
 					resource.TestCheckResourceAttr(
@@ -285,7 +285,7 @@ func TestAccAWSLaunchConfiguration_updateEbsBlockDevices(t *testing.T) {
 				),
 			},
 			{
-				Config: testAccAWSLaunchConfigurationWithEncryptionUpdated,
+				Config: testAccAWSLaunchConfigurationWithEncryptionDeprecatedUpdated,
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckAWSLaunchConfigurationExists("aws_launch_configuration.baz", &conf),
 					resource.TestCheckResourceAttr(
@@ -420,7 +420,7 @@ func testAccCheckAWSLaunchConfigurationExists(n string, res *autoscaling.LaunchC
 	}
 }
 
-func testAccAWSLaunchConfigurationConfigWithRootBlockDevice(rInt int) string {
+func testAccAWSLaunchConfigurationConfigDeprecatedWithRootBlockDevice(rInt int) string {
 	return fmt.Sprintf(`
 resource "aws_launch_configuration" "bar" {
   name_prefix = "tf-acc-test-%d"
@@ -438,7 +438,7 @@ resource "aws_launch_configuration" "bar" {
 `, rInt)
 }
 
-func testAccAWSLaunchConfigurationConfigWithRootBlockDeviceUpdated(rInt int) string {
+func testAccAWSLaunchConfigurationConfigDeprecatedWithRootBlockDeviceUpdated(rInt int) string {
 	return fmt.Sprintf(`
 resource "aws_launch_configuration" "bar" {
   name_prefix = "tf-acc-test-%d"
@@ -456,7 +456,7 @@ resource "aws_launch_configuration" "bar" {
 `, rInt)
 }
 
-var testAccAWSLaunchConfigurationConfig = fmt.Sprintf(`
+var testAccAWSLaunchConfigurationConfigDeprecated = fmt.Sprintf(`
 resource "aws_launch_configuration" "bar" {
   name = "tf-acc-test-%d"
   image_id = "ami-21f78e11"
@@ -513,7 +513,7 @@ resource "aws_launch_configuration" "baz" {
 }
 `
 
-const testAccAWSLaunchConfigurationWithEncryption = `
+const testAccAWSLaunchConfigurationWithEncryptionDeprecated = `
 resource "aws_launch_configuration" "baz" {
    image_id = "ami-5189a661"
    instance_type = "t2.micro"
@@ -531,7 +531,7 @@ resource "aws_launch_configuration" "baz" {
 }
 `
 
-const testAccAWSLaunchConfigurationWithEncryptionUpdated = `
+const testAccAWSLaunchConfigurationWithEncryptionDeprecatedUpdated = `
 resource "aws_launch_configuration" "baz" {
    image_id = "ami-5189a661"
    instance_type = "t2.micro"
