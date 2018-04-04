@@ -105,6 +105,33 @@ func TestAccAWSLaunchConfiguration_basic(t *testing.T) {
 	})
 }
 
+func TestAccAWSLaunchConfiguration_withBlockDevices(t *testing.T) {
+	var conf autoscaling.LaunchConfiguration
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckAWSLaunchConfigurationDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccAWSLaunchConfigurationConfig,
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckAWSLaunchConfigurationExists("aws_launch_configuration.bar", &conf),
+					testAccCheckAWSLaunchConfigurationAttributes(&conf),
+					resource.TestCheckResourceAttr(
+						"aws_launch_configuration.bar", "image_id", "ami-21f78e11"),
+					resource.TestCheckResourceAttr(
+						"aws_launch_configuration.bar", "instance_type", "m1.small"),
+					resource.TestCheckResourceAttr(
+						"aws_launch_configuration.bar", "associate_public_ip_address", "true"),
+					resource.TestCheckResourceAttr(
+						"aws_launch_configuration.bar", "spot_price", ""),
+				),
+			},
+		},
+	})
+}
+
 func TestAccAWSLaunchConfiguration_deprecated_withBlockDevices(t *testing.T) {
 	var conf autoscaling.LaunchConfiguration
 
@@ -126,6 +153,35 @@ func TestAccAWSLaunchConfiguration_deprecated_withBlockDevices(t *testing.T) {
 						"aws_launch_configuration.bar", "associate_public_ip_address", "true"),
 					resource.TestCheckResourceAttr(
 						"aws_launch_configuration.bar", "spot_price", ""),
+				),
+			},
+		},
+	})
+}
+
+func TestAccAWSLaunchConfiguration_updateRootBlockDevice(t *testing.T) {
+	var conf autoscaling.LaunchConfiguration
+	rInt := acctest.RandInt()
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckAWSLaunchConfigurationDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccAWSLaunchConfigurationConfigWithRootBlockDevice(rInt),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckAWSLaunchConfigurationExists("aws_launch_configuration.bar", &conf),
+					resource.TestCheckResourceAttr(
+						"aws_launch_configuration.bar", "block_device_mapping.704117120.ebs.0.volume_size", "11"),
+				),
+			},
+			{
+				Config: testAccAWSLaunchConfigurationConfigWithRootBlockDeviceUpdated(rInt),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckAWSLaunchConfigurationExists("aws_launch_configuration.bar", &conf),
+					resource.TestCheckResourceAttr(
+						"aws_launch_configuration.bar", "block_device_mapping.1438757659.ebs.0.volume_size", "20"),
 				),
 			},
 		},
@@ -249,6 +305,25 @@ func testAccCheckAWSLaunchConfigurationWithEncryption(conf *autoscaling.LaunchCo
 	}
 }
 
+func TestAccAWSLaunchConfiguration_withEncryption(t *testing.T) {
+	var conf autoscaling.LaunchConfiguration
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckAWSLaunchConfigurationDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccAWSLaunchConfigurationWithEncryption,
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckAWSLaunchConfigurationExists("aws_launch_configuration.baz", &conf),
+					testAccCheckAWSLaunchConfigurationWithEncryption(&conf),
+				),
+			},
+		},
+	})
+}
+
 func TestAccAWSLaunchConfiguration_deprecated_withEncryption(t *testing.T) {
 	var conf autoscaling.LaunchConfiguration
 
@@ -262,6 +337,46 @@ func TestAccAWSLaunchConfiguration_deprecated_withEncryption(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckAWSLaunchConfigurationExists("aws_launch_configuration.baz", &conf),
 					testAccCheckAWSLaunchConfigurationWithEncryption(&conf),
+				),
+			},
+		},
+	})
+}
+
+func TestAccAWSLaunchConfiguration_updateEbsBlockDevices(t *testing.T) {
+	var conf autoscaling.LaunchConfiguration
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckAWSLaunchConfigurationDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccAWSLaunchConfigurationWithEncryption,
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckAWSLaunchConfigurationExists("aws_launch_configuration.baz", &conf),
+					resource.TestCheckResourceAttr(
+						"aws_launch_configuration.baz", "block_device_mapping.1552022932.ebs.0.volume_size", "9"),
+					resource.TestCheckResourceAttr(
+						"aws_launch_configuration.baz", "block_device_mapping.1552022932.is_root_device", "false"),
+					resource.TestCheckResourceAttr(
+						"aws_launch_configuration.baz", "block_device_mapping.704117120.ebs.0.volume_size", "11"),
+					resource.TestCheckResourceAttr(
+						"aws_launch_configuration.baz", "block_device_mapping.704117120.is_root_device", "true"),
+				),
+			},
+			{
+				Config: testAccAWSLaunchConfigurationWithEncryptionUpdated,
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckAWSLaunchConfigurationExists("aws_launch_configuration.baz", &conf),
+					resource.TestCheckResourceAttr(
+						"aws_launch_configuration.baz", "block_device_mapping.4190606250.ebs.0.volume_size", "10"),
+					resource.TestCheckResourceAttr(
+						"aws_launch_configuration.baz", "block_device_mapping.4190606250.is_root_device", "false"),
+					resource.TestCheckResourceAttr(
+						"aws_launch_configuration.baz", "block_device_mapping.704117120.ebs.0.volume_size", "11"),
+					resource.TestCheckResourceAttr(
+						"aws_launch_configuration.baz", "block_device_mapping.704117120.is_root_device", "true"),
 				),
 			},
 		},
@@ -420,6 +535,46 @@ func testAccCheckAWSLaunchConfigurationExists(n string, res *autoscaling.LaunchC
 	}
 }
 
+func testAccAWSLaunchConfigurationConfigWithRootBlockDevice(rInt int) string {
+	return fmt.Sprintf(`
+resource "aws_launch_configuration" "bar" {
+  name_prefix = "tf-acc-test-%d"
+  image_id = "ami-21f78e11"
+  instance_type = "m1.small"
+  user_data = "foobar-user-data"
+  associate_public_ip_address = true
+
+  block_device_mapping {
+    is_root_device = true
+    ebs {
+      volume_type = "gp2"
+      volume_size = 11
+    }
+  }
+}
+`, rInt)
+}
+
+func testAccAWSLaunchConfigurationConfigWithRootBlockDeviceUpdated(rInt int) string {
+	return fmt.Sprintf(`
+resource "aws_launch_configuration" "bar" {
+  name_prefix = "tf-acc-test-%d"
+  image_id = "ami-21f78e11"
+  instance_type = "m1.small"
+  user_data = "foobar-user-data"
+  associate_public_ip_address = true
+
+  block_device_mapping {
+    is_root_device = true
+    ebs {
+      volume_type = "gp2"
+      volume_size = 20
+    }
+  }
+}
+`, rInt)
+}
+
 func testAccAWSLaunchConfigurationConfigDeprecatedWithRootBlockDevice(rInt int) string {
 	return fmt.Sprintf(`
 resource "aws_launch_configuration" "bar" {
@@ -455,6 +610,42 @@ resource "aws_launch_configuration" "bar" {
 }
 `, rInt)
 }
+
+var testAccAWSLaunchConfigurationConfig = fmt.Sprintf(`
+resource "aws_launch_configuration" "bar" {
+  name = "tf-acc-test-%d"
+  image_id = "ami-21f78e11"
+  instance_type = "m1.small"
+  user_data = "foobar-user-data"
+  associate_public_ip_address = true
+
+  block_device_mapping {
+    is_root_device = true
+    ebs {
+      volume_type = "gp2"
+      volume_size = 11
+    }
+  }
+  block_device_mapping {
+    device_name = "/dev/sdb"
+    ebs {
+      volume_size = 9
+    }
+  }
+  block_device_mapping {
+    device_name = "/dev/sdc"
+    ebs {
+      volume_size = 10
+      volume_type = "io1"
+      iops = 100
+    }
+  }
+  block_device_mapping {
+    device_name = "/dev/sde"
+    virtual_name = "ephemeral0"
+  }
+}
+`, rand.New(rand.NewSource(time.Now().UnixNano())).Int())
 
 var testAccAWSLaunchConfigurationConfigDeprecated = fmt.Sprintf(`
 resource "aws_launch_configuration" "bar" {
@@ -510,6 +701,52 @@ resource "aws_launch_configuration" "baz" {
    instance_type = "t1.micro"
    user_data = "foobar-user-data-change"
    associate_public_ip_address = false
+}
+`
+
+const testAccAWSLaunchConfigurationWithEncryption = `
+resource "aws_launch_configuration" "baz" {
+  image_id = "ami-5189a661"
+  instance_type = "t2.micro"
+  associate_public_ip_address = false
+
+  block_device_mapping {
+    is_root_device = true
+    ebs {
+      volume_type = "gp2"
+      volume_size = 11
+    }
+  }
+  block_device_mapping {
+    device_name = "/dev/sdb"
+    ebs {
+      volume_size = 9
+      encrypted = true
+    }
+  }
+}
+`
+
+const testAccAWSLaunchConfigurationWithEncryptionUpdated = `
+resource "aws_launch_configuration" "baz" {
+  image_id = "ami-5189a661"
+  instance_type = "t2.micro"
+  associate_public_ip_address = false
+
+  block_device_mapping {
+    is_root_device = true
+    ebs {
+      volume_type = "gp2"
+      volume_size = 11
+    }
+  }
+  block_device_mapping {
+    device_name = "/dev/sdb"
+    ebs {
+      volume_size = 10
+      encrypted = true
+    }
+  }
 }
 `
 
