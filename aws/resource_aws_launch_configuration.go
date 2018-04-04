@@ -26,6 +26,29 @@ func resourceAwsLaunchConfiguration() *schema.Resource {
 			State: schema.ImportStatePassthrough,
 		},
 
+		CustomizeDiff: func(diff *schema.ResourceDiff, v interface{}) error {
+			if v, ok := diff.GetOk("block_device_mapping"); ok {
+				ebsDevice := v.(*schema.Set).List()
+				for _, device := range ebsDevice {
+					m := device.(map[string]interface{})
+
+					virtualName, virtualNameOk := m["virtual_name"].(string)
+					ebs, ebsOk := m["ebs"].([]interface{})
+					if virtualNameOk && virtualName != "" && ebsOk && len(ebs) > 0 {
+						return fmt.Errorf("Cannot specify both %q and %q. Pick one.",
+							"virtual_name", "ebs")
+					}
+
+					deviceName, deviceNameOk := m["device_name"].(string)
+					if m["is_root_device"].(bool) && deviceNameOk && deviceName != "" {
+						return fmt.Errorf("Cannot specify both %q and %q. Pick one.",
+							"is_root_device", "device_name")
+					}
+				}
+			}
+			return nil
+		},
+
 		Schema: map[string]*schema.Schema{
 			"name": {
 				Type:          schema.TypeString,
